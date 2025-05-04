@@ -10,7 +10,7 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 
-st.title("📊 Data Analysis and Prediction App (Decision Tree Version)")
+st.title("📊 Data Analysis and Prediction App")
 
 # Upload
 uploaded_file = st.file_uploader("Upload File", type=["csv"])
