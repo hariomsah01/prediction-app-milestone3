@@ -51,7 +51,8 @@ app.layout = html.Div([
     html.Div(id="train-output"),
 
     html.Div([
-        dcc.Input(id='predict-input', type='text', placeholder='e.g., 20,dinner'),
+        html.Div(id='expected-format', style={'marginBottom': '5px'}),
+        dcc.Input(id='predict-input', type='text', placeholder='Enter values matching selected features'),
         html.Button('Predict', id='predict-btn', n_clicks=0, style={'marginLeft': '10px'}),
         html.Span(id='predict-output', style={'marginLeft': '10px'})
     ])
@@ -150,6 +151,7 @@ def train_model(n, target, features):
     State('predict-input', 'value')
 )
 def make_prediction(n_clicks, input_str):
+    global features_used
     if model is None or not input_str:
         return ""
     try:
@@ -158,8 +160,21 @@ def make_prediction(n_clicks, input_str):
         input_df = pd.DataFrame([parsed], columns=features_used)
         pred = model.predict(input_df)
         return f"Predicted {target_column} is : {pred[0]:.2f}"
+    except ValueError as e:
+        return f"⚠️ Input Error: {str(e)}"
+    except Exception as e:
+        return f"❌ Failed to predict: {str(e)}"
     except Exception as e:
         return f"Error: {e}"
 
 if __name__ == '__main__':
     app.run_server(debug=True)
+
+@app.callback(
+    Output('expected-format', 'children'),
+    Input('feature-checklist', 'value')
+)
+def update_format_list(selected_features):
+    if selected_features:
+        return html.Div(f"📝 Enter values for: {', '.join(selected_features)}")
+    return ""
