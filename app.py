@@ -48,7 +48,6 @@ app.layout = html.Div([
 
     html.Button("Train", id="train-btn", style={'marginBottom': '10px'}),
     html.Div(id="train-output"),
-
     html.Div(id='expected-format', style={'margin': '10px 0', 'fontWeight': 'bold'}),
 
     html.Div([
@@ -101,13 +100,16 @@ def update_graphs(target, cat_col):
     if df_global is None or not target or not cat_col:
         return {}, {}
     try:
-        avg_df = df_global.groupby(cat_col)[target].mean().reset_index()
-        fig1 = px.bar(avg_df, x=cat_col, y=target, title=f"Average {target} by {cat_col}",
-                      text_auto='.2f')
+        df = df_global.copy()
+        if cat_col not in df.columns or target not in df.columns:
+            return {}, {}
+
+        avg_df = df.groupby(cat_col)[target].mean().reset_index()
+        fig1 = px.bar(avg_df, x=cat_col, y=target, title=f"Average {target} by {cat_col}", text_auto='.2f')
         fig1.update_traces(marker_color='lightblue', textposition='outside')
         fig1.update_layout(margin=dict(t=60, b=30), yaxis_title=f"{target} (Average)")
 
-        corr = df_global.select_dtypes(include='number').corr()[[target]].abs().drop(target)
+        corr = df.select_dtypes(include='number').corr()[[target]].abs().drop(target)
         corr_sorted = corr.sort_values(by=target, ascending=False)
         fig2 = px.bar(corr_sorted, x=corr_sorted.index, y=target,
                       title=f"Correlation Strength of Numerical Variables with {target}",
