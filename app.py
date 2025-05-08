@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output, State, ctx
+from dash import dcc, html, Input, Output, State
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -46,17 +46,18 @@ app.layout = html.Div([
     html.Label("Select Features:"),
     dcc.Checklist(id='feature-checklist', inline=True),
 
-    html.Br(),
+    html.Div(id='expected-format', style={'margin': '10px 0', 'fontWeight': 'bold'}),
+
     html.Button("Train", id="train-btn", style={'marginBottom': '10px'}),
     html.Div(id="train-output"),
 
     html.Div([
-        html.Div(id='expected-format', style={'marginBottom': '5px'}),
-        dcc.Input(id='predict-input', type='text', placeholder='Enter values matching selected features'),
+        dcc.Input(id='predict-input', type='text', placeholder='Enter comma-separated values'),
         html.Button('Predict', id='predict-btn', n_clicks=0, style={'marginLeft': '10px'}),
         html.Span(id='predict-output', style={'marginLeft': '10px'})
     ])
 ], style={'width': '90%', 'margin': 'auto', 'fontFamily': 'Arial'})
+
 
 @app.callback(
     Output('file-info', 'children'),
@@ -88,6 +89,7 @@ def load_data(contents, filename):
         )
     return "", [], None, [], None, [], []
 
+
 @app.callback(
     Output('bar-cat', 'figure'),
     Output('bar-corr', 'figure'),
@@ -98,18 +100,32 @@ def update_graphs(target, cat_col):
     if df_global is None or not target or not cat_col:
         return {}, {}
     avg_df = df_global.groupby(cat_col)[target].mean().reset_index()
-    fig1 = px.bar(avg_df, x=cat_col, y=target, title=f"Average {target} by {cat_col}")
-    fig1.update_traces(marker_color='lightblue', texttemplate='%{y:.2f}', textposition='outside')
-    fig1.update_layout(uniformtext_minsize=8, uniformtext_mode='hide', yaxis_title=f"{target} (Average)")
+    fig1 = px.bar(avg_df, x=cat_col, y=target, title=f"Average {target} by {cat_col}",
+                  text_auto='.2f')
+    fig1.update_traces(marker_color='lightblue', textposition='outside')
+    fig1.update_layout(
+        yaxis_title=f"{target} (Average)",
+        margin=dict(t=60, b=30),
+        uniformtext_minsize=8,
+        uniformtext_mode='hide'
+    )
 
-    corr = df_global.select_dtypes(include='number').corr()[[target]].abs().drop(target).sort_values(by=target, ascending=False)
-    fig2 = px.bar(corr, x=corr.index, y=target,
+    corr = df_global.select_dtypes(include='number').corr()[[target]].abs().drop(target)
+    corr_sorted = corr.sort_values(by=target, ascending=False)
+    fig2 = px.bar(corr_sorted, x=corr_sorted.index, y=target,
                   title=f"Correlation Strength of Numerical Variables with {target}",
-                  labels={target: "Correlation Strength (Absolute Value)"})
-    fig2.update_traces(marker_color='royalblue', texttemplate='%{y:.2f}', textposition='outside')
-    fig2.update_layout(uniformtext_minsize=8, uniformtext_mode='hide', yaxis_title="Correlation Strength")
+                  labels={target: "Correlation Strength"},
+                  text_auto='.2f')
+    fig2.update_traces(marker_color='royalblue', textposition='outside')
+    fig2.update_layout(
+        yaxis_title="Correlation Strength",
+        margin=dict(t=60, b=30),
+        uniformtext_minsize=8,
+        uniformtext_mode='hide'
+    )
 
     return fig1, fig2
+
 
 @app.callback(
     Output('train-output', 'children'),
@@ -118,11 +134,20 @@ def update_graphs(target, cat_col):
     State('feature-checklist', 'value')
 )
 def train_model(n, target, features):
-    global model, features_used, target_column
-    if df_global is None or not features:
-        return "No data or features selected."
-    X = df_global[features]
-    y = df_global[target]
+    global df_global, model, features_used, target_column
+    if df_global is None:
+        return "⚠️ No data uploaded."
+    if not features:
+        return "⚠️ Please select at least one feature."
+    if not target:
+        return "⚠️ Please select a target variable."
+
+    try:
+        X = df_global[features]
+        y = df_global[target]
+    except Exception as e:
+        return f"❌ Error accessing selected features: {e}"
+
     cat_feats = X.select_dtypes(include='object').columns.tolist()
     num_feats = X.select_dtypes(include='number').columns.tolist()
 
@@ -137,13 +162,17 @@ def train_model(n, target, features):
         ("regressor", DecisionTreeRegressor(random_state=42))
     ])
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    r2 = r2_score(y_test, y_pred)
-    features_used = features
-    target_column = target
-    return f"The R2 score is: {r2:.2f}"
+    try:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        r2 = r2_score(y_test, y_pred)
+        features_used = features
+        target_column = target
+        return f"The R2 score is: {r2:.2f}"
+    except Exception as e:
+        return f"❌ Model training failed: {e}"
+
 
 @app.callback(
     Output('predict-output', 'children'),
@@ -156,6 +185,8 @@ def make_prediction(n_clicks, input_str):
         return ""
     try:
         raw_values = [v.strip() for v in input_str.split(",")]
+        if len(raw_values) != len(features_used):
+            return f"⚠️ Enter {len(features_used)} values: {', '.join(features_used)}"
         parsed = [float(v) if v.replace('.', '', 1).isdigit() else v for v in raw_values]
         input_df = pd.DataFrame([parsed], columns=features_used)
         pred = model.predict(input_df)
@@ -164,11 +195,7 @@ def make_prediction(n_clicks, input_str):
         return f"⚠️ Input Error: {str(e)}"
     except Exception as e:
         return f"❌ Failed to predict: {str(e)}"
-    except Exception as e:
-        return f"Error: {e}"
 
-if __name__ == '__main__':
-    app.run_server(debug=True)
 
 @app.callback(
     Output('expected-format', 'children'),
@@ -176,5 +203,8 @@ if __name__ == '__main__':
 )
 def update_format_list(selected_features):
     if selected_features:
-        return html.Div(f"📝 Enter values for: {', '.join(selected_features)}")
+        return f"📝 Enter values for: {', '.join(selected_features)}"
     return ""
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
