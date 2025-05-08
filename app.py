@@ -46,10 +46,10 @@ app.layout = html.Div([
     html.Label("Select Features:"),
     dcc.Checklist(id='feature-checklist', inline=True),
 
-    html.Div(id='expected-format', style={'margin': '10px 0', 'fontWeight': 'bold'}),
-
     html.Button("Train", id="train-btn", style={'marginBottom': '10px'}),
     html.Div(id="train-output"),
+
+    html.Div(id='expected-format', style={'margin': '10px 0', 'fontWeight': 'bold'}),
 
     html.Div([
         dcc.Input(id='predict-input', type='text', placeholder='Enter comma-separated values'),
@@ -94,37 +94,30 @@ def load_data(contents, filename):
     Output('bar-cat', 'figure'),
     Output('bar-corr', 'figure'),
     Input('target-dropdown', 'value'),
-    Input('cat-radio', 'value')
+    Input('cat-radio', 'value'),
+    prevent_initial_call=True
 )
 def update_graphs(target, cat_col):
     if df_global is None or not target or not cat_col:
         return {}, {}
-    avg_df = df_global.groupby(cat_col)[target].mean().reset_index()
-    fig1 = px.bar(avg_df, x=cat_col, y=target, title=f"Average {target} by {cat_col}",
-                  text_auto='.2f')
-    fig1.update_traces(marker_color='lightblue', textposition='outside')
-    fig1.update_layout(
-        yaxis_title=f"{target} (Average)",
-        margin=dict(t=60, b=30),
-        uniformtext_minsize=8,
-        uniformtext_mode='hide'
-    )
+    try:
+        avg_df = df_global.groupby(cat_col)[target].mean().reset_index()
+        fig1 = px.bar(avg_df, x=cat_col, y=target, title=f"Average {target} by {cat_col}",
+                      text_auto='.2f')
+        fig1.update_traces(marker_color='lightblue', textposition='outside')
+        fig1.update_layout(margin=dict(t=60, b=30), yaxis_title=f"{target} (Average)")
 
-    corr = df_global.select_dtypes(include='number').corr()[[target]].abs().drop(target)
-    corr_sorted = corr.sort_values(by=target, ascending=False)
-    fig2 = px.bar(corr_sorted, x=corr_sorted.index, y=target,
-                  title=f"Correlation Strength of Numerical Variables with {target}",
-                  labels={target: "Correlation Strength"},
-                  text_auto='.2f')
-    fig2.update_traces(marker_color='royalblue', textposition='outside')
-    fig2.update_layout(
-        yaxis_title="Correlation Strength",
-        margin=dict(t=60, b=30),
-        uniformtext_minsize=8,
-        uniformtext_mode='hide'
-    )
-
-    return fig1, fig2
+        corr = df_global.select_dtypes(include='number').corr()[[target]].abs().drop(target)
+        corr_sorted = corr.sort_values(by=target, ascending=False)
+        fig2 = px.bar(corr_sorted, x=corr_sorted.index, y=target,
+                      title=f"Correlation Strength of Numerical Variables with {target}",
+                      labels={target: "Correlation Strength"},
+                      text_auto='.2f')
+        fig2.update_traces(marker_color='royalblue', textposition='outside')
+        fig2.update_layout(margin=dict(t=60, b=30), yaxis_title="Correlation Strength")
+        return fig1, fig2
+    except Exception:
+        return {}, {}
 
 
 @app.callback(
